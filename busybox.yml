@@ -10,3 +10,16 @@ spec:
     args:
     - sleep
     - "10m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bb-nodeport
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      nodePort: 30180
+      name: http
+  selector:
+    name: bb
