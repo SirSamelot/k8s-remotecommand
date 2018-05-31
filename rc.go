@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -34,71 +33,71 @@ func newStringReader(ss []string) io.Reader {
 	return reader
 }
 
-func homeDir() string {
-	if h := os.Getenv("HOME"); h != "" {
-		return h
-	}
-	return os.Getenv("USERPROFILE") // windows
-}
-
 func main() {
 	fmt.Println("/////////////// Remote Command PoC ///////////////")
 
-	// get the kubeconfig
-	var kubeconfig *string
-	if home := homeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-	flag.Parse()
-
-	// use the current context in kubeconfig
-	config, _ := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	kubeClient := kubernetes.NewForConfigOrDie(config)
-
+	// Parameters
 	namespace := "default"
 	podName := "bb"
+	// note that command does not handle chaining commands
+	command := []string{"ls", "-al"}
+	// command := []string{"touch", "hello.txt"}
 
-	// Testing that we are talking to kubernetes
-	pods, _ := kubeClient.CoreV1().Pods(namespace).List(metav1.ListOptions{})
-	fmt.Printf("There are %d pods in the namespace '%s'\n", len(pods.Items), namespace)
+	// Initialize
+	kubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+	kubeClient := kubernetes.NewForConfigOrDie(config)
 
-	pod, _ := kubeClient.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+	// Get the Container name
+	pod, err := kubeClient.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
+	// TODO: what happens when the first container in the Pods list is not an ES container?
 	containerName := pod.Spec.Containers[0].Name
 	fmt.Printf("Container Name: %s\n", containerName)
 
-	// create the request
-	execRequest := kubeClient.CoreV1().RESTClient().Post()
-	execRequest = execRequest.
+	// Create the request
+	execRequest := kubeClient.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
 		Namespace(namespace).
 		SubResource("exec")
 	execRequest.VersionedParams(&v1.PodExecOptions{
 		Container: containerName,
-		Command:   []string{"ls", "-al"},
+		Command:   command,
 		Stdout:    true,
 		Stderr:    true,
 		Stdin:     true,
 	}, scheme.ParameterCodec)
 
 	fmt.Printf("URL:\t%s\n", execRequest.URL())
+	fmt.Printf("Executing command \"%s\" on container [%s] in pod [%s] \n", strings.Join(command, " "), containerName, podName)
+
 	// Create the executor
 	exec, _ := remotecommand.NewSPDYExecutor(config, "POST", execRequest.URL())
 
-	stdIn := newStringReader([]string{"-c", "-al"})
+	// Create the stream objects
+	stdIn := newStringReader([]string{})
 	stdOut := new(Writer)
 	stdErr := new(Writer)
 
-	// Stream the command
-	_ = exec.Stream(remotecommand.StreamOptions{
+	// Execute the command
+	err = exec.Stream(remotecommand.StreamOptions{
 		Stdin:  stdIn,
 		Stdout: stdOut,
 		Stderr: stdErr,
 		Tty:    false,
 	})
-	fmt.Printf("stdIn:\t%s\nstdOut:\t%s\nstdErr:\t%s\n", stdIn, stdOut, stdErr)
 
+	// Display stdout and stderr
+	fmt.Printf("[stdOut]\n%s\n", stdOut)
+	if err != nil {
+		fmt.Printf("[stdErr]\n%s\n", stdErr)
+		fmt.Printf("[ERROR] %v\n", err)
+	}
 	fmt.Println("----------- FINISHED -------------")
 }
