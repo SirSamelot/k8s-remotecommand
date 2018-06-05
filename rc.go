@@ -102,12 +102,12 @@ func main() {
 	fmt.Println("/////////////// Remote Command PoC ///////////////")
 
 	// Parameters
-	// namespace := "es2"
-	// podName := "elasticsearch-0"
-	namespace := "default"
-	podName := "bb"
-	command := "ls -al"
-	// command := "touch hello.txt"
+	// namespace := "default"
+	// podName := "bb"
+	// command := "ls -al"
+	namespace := "es1"
+	podName := "elasticsearch-0"
+	command := "touch hello.txt"
 
 	output, err := RemoteExec(namespace, podName, command)
 
@@ -116,8 +116,11 @@ func main() {
 		fmt.Printf("[err]\n%s\n", err)
 		return
 	}
+	if output != "" {
+		fmt.Printf("[stdout]\n%s\n", output)
+	} else {
+		fmt.Println("[Command successful with no stdout]")
+	}
 
-	fmt.Printf("[stdout]\n%s\n", output)
-
-	fmt.Println("----------- FINISHED -------------")
+	fmt.Println("//////////////////////////////////////////////////")
 }
