@@ -8,7 +8,7 @@ Proof of Concept for issuing remote commands to kubernetes pods
 
     ```kubectl create -f busybox.yml```
 
-2. Run the PoC script
+2. Run the PoC script, changing the namespace, pod name, and shell command in `main()` as necessary
 
     ```go run rc.go```
 
